@@ -32,6 +32,55 @@
    class(out) <- c('bmmmodel','M3', 'M3custom')
    out
 }
+
+
+.model_M3cs <- function(resp_cats = NULL, num_options = NULL, choice_rule = "softmax", ...) {
+  out <- list(
+    resp_vars = nlist(resp_cats),
+    other_vars = nlist(num_options, choice_rule),
+    info = list(
+      domain = 'Working Memory (categorical)',
+      task = 'n-AFC retrieval',
+      name = 'The Memory Measurement Model by Oberauer & Lewandowsky (2019)',
+      citation = 'Oberauer, K., & Lewandowsky, S. (2019). Simple measurement models for complex working-memory tasks. Psychological Review, 126.',
+      version = 'cs',
+      requirements = '- Provide names for variables specifying the number of responses in a set of response categories.',
+      parameters = list(
+        a = "Item activation. This parameter is the activation of the item in the working memory.",
+        c = "Binding activation. This parameter is the activation of the binding between the item and the context.",
+        ra = Paste0(
+          "Residual proportion of item activation.",
+          "This parameter represents the proportion of the item activation",
+          "for distractors that is not removed from working memory."),
+        rc = paste0(
+          "Residual proportion of binding activation.",
+          "This parameter represents the proportion of the binding activation",
+          "for distractors that is not removed from working memory."),
+        b = "Background activation. This source of activation should be added to the
+              activation function for each response category, and represents the background
+              noise. This parameter is fixed for scaling, but needs to be included in all
+              models."
+      ),
+      fixed_parameters = list(
+        b = 0
+      )
+    ),
+    void_mu = FALSE
+  )
+  class(out) <- c('bmmmodel','M3', 'M3cs')
+  out
+}
+
+
+
+
+
+
+
+
+
+
+
 # user facing alias
 # information in the title and details sections will be filled in
 # automatically based on the information in the .model_M3()$info
