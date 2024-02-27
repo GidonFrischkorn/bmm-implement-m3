@@ -68,7 +68,6 @@ check_data.vwm <- function(model, data, formula) {
   NextMethod("check_data")
 }
 
-
 #' @export
 check_data.nontargets <- function(model, data, formula) {
   nt_features <- model$other_vars$nt_features
@@ -105,7 +104,6 @@ check_data.nontargets <- function(model, data, formula) {
   NextMethod("check_data")
 }
 
-
 check_var_setsize <- function(setsize, data) {
   if (length(setsize) > 1) {
     stop2("The setsize variable '", setsize, "' must be a single numeric value or a single variable in your data",
@@ -114,7 +112,7 @@ check_var_setsize <- function(setsize, data) {
   # class check - is setsize a single numeric value or a variable in the data
   # coericble to a numeric vector?
   if (is_data_var(setsize, data)) {
-    ss_numeric <- try(as_numeric_vector(data[[setsize]]), silent=T)
+    ss_numeric <- try(as_numeric_vector(data[[setsize]]), silent = T)
     if (is_try_error(ss_numeric)) {
       stop2("The setsize variable '", setsize, "' must be coercible to a numeric vector.\n",
             "Did you code your set size as a character vector?")
@@ -138,6 +136,48 @@ check_var_setsize <- function(setsize, data) {
 
   list(max_setsize = max_setsize, ss_numeric = ss_numeric)
 }
+
+check_data.M3 <- function(model, data, formula) {
+  # Check if response variables are all present in the data
+  resp_name <- model$resp_vars$resp_cats
+  col_name <- colnames(data)
+  missing_list <- setdiff(resp_name, intersect(resp_name, col_name))
+  if (length(missing_list) > 0) {
+    stop(paste0(
+      "The response variable(s) '",
+      paste0(missing_list,collapse = "', '"),
+      "' is not present in the data."))
+  }
+
+  # Check if each response variable is provided the number of options
+  nOpt_data <- model$other_vars$num_options
+  option_name <- names(nOpt_data)
+  if (!is.null(option_name)) {
+    missing_list <- setdiff(resp_name, intersect(resp_name, option_name))
+    if (length(missing_list) > 0) {
+      stop(paste0(
+        "The response variable(s) '",
+        paste0(missing_list,collapse = "', '"),
+        "' is not provided the number of options"))
+    }
+  } else {
+    warning("You have provided an unnamed vector for \"num_options\". We will assume that the variables names
+            or integer values given for \"num_options\" are sorted according to the provided \"resp_cats\" ")
+    names(model$other_vars$num_options) <- model$resp_vars$resp_cats
+  }
+
+
+  # Transfer all of the response variables to a matrix and name it 'Y'
+  data$nTrials <- rowSums(data[,resp_name])
+  data$Y <- as.matrix(data[,resp_name])
+  colnames(data$Y) <- resp_name
+
+  data <- dplyr::select(data, -all_of(resp_name))
+
+  NextMethod("check_data")
+}
+
+
 
 
 #############################################################################!
