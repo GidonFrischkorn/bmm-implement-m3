@@ -478,5 +478,7 @@ apply_links <- function(formula, links) {
     formula[[dpar]] <- stats::as.formula(paste0(split_form[1], "~", split_form[2]))
   }
 
-  formula
+  formula <- reset_env(formula)
+  formula <- assign_nl(formula)
+  assign_constants(formula)
 }

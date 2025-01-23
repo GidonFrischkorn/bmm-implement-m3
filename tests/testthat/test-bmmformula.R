@@ -84,3 +84,10 @@ test_that('print.bmmformula works', {
   res <- utils::capture.output(bmf(a ~ 1, b = 2))
   expect_equal(res, c("a ~ 1", "b = 2"))
 })
+
+test_that("apply_links matches a directly written formula", {
+  form <- bmf(x ~ a + c, kappa ~ 1, a ~ 1, c ~ 1)
+  links <- list(a = "log", c = "logit")
+  reform <- apply_links(form, links)
+  expect_equal(reform, reset_env(bmf(x ~ exp(a) + inv_logit(c), kappa ~ 1, a ~ 1, c ~ 1)))
+})
