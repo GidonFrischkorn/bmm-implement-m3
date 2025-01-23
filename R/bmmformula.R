@@ -465,11 +465,12 @@ apply_links <- function(formula, links) {
       if (is.numeric(links[[par]])) {
         replace <- as.character(links[[par]])
       } else {
-        replace <- dplyr::case_when(
-          links[[par]] == "log" ~ paste0(" exp(", par, ") "),
-          links[[par]] == "logit" ~ paste0(" inv_logit(", par, ") "),
-          links[[par]] == "probit" ~ paste0("Phi(", par, ")"),
-          TRUE ~ par
+        replace <- switch(
+          links[[par]],
+          log = glue(" exp({par}) "),
+          logit = glue(" inv_logit({par}) "),
+          probit = glue(" Phi({par}) "),
+          par
         )
       }
       par_name <- paste0("\\b", par, "\\b") # match whole word only

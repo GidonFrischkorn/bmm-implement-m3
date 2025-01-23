@@ -91,3 +91,10 @@ test_that("apply_links matches a directly written formula", {
   reform <- apply_links(form, links)
   expect_equal(reform, reset_env(bmf(x ~ exp(a) + inv_logit(c), kappa ~ 1, a ~ 1, c ~ 1)))
 })
+
+test_that("apply_links works with links for multiple predicted parameters", {
+  form <- bmf(x ~ a + c, kappa ~ b + d, a ~ 1, c ~ 1, b ~ 1, d ~ 1)
+  links <- list(a = "log", c = "identity", d = "probit")
+  reform <- apply_links(form, links)
+  expect_equal(reform, reset_env(bmf(x ~ exp(a) + c, kappa ~ b + Phi(d), a ~ 1, c ~ 1, b ~ 1, d ~ 1)))
+})
