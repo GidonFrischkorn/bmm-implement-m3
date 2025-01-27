@@ -408,12 +408,10 @@ construct_m3_act_funs <- function(model = NULL, warnings = TRUE) {
   if (model$version == "ss") {
     warnif(
       warnings,
-      glue(
-        '\nThe "ss" version of the m3 requires that response categories are ordered as follows:
-        1) correct: correct responses
-        2) other: other list responses
-        3) npl: not presented lures'
-      )
+      '\nThe "ss" version of the m3 requires that response categories are ordered as follows:
+      1) correct: correct responses
+      2) other: other list responses
+      3) npl: not presented lures'
     )
 
     act_funs <- bmf(
@@ -424,14 +422,12 @@ construct_m3_act_funs <- function(model = NULL, warnings = TRUE) {
   } else if (model$version == "cs") {
     warnif(
       warnings,
-      glue(
-        "\n", "The \"cs\" version of the m3 requires that response categories are ordered as follows:\n",
-        " 1) correct: correct responses\n",
-        " 2) dist_context: distractor responses close in context to the correct item\n",
-        " 3) other: other list responses\n",
-        " 4) dist_other: all distractor responses not close in context to the correct item\n",
-        " 5) npl: not presented lures"
-      )
+      "\nThe \"cs\" version of the m3 requires that response categories are ordered as follows:
+      1) correct: correct responses
+      2) dist_context: distractor responses close in context to the correct item
+      3) other: other list responses
+      4) dist_other: all distractor responses not close in context to the correct item
+      5) npl: not presented lures"
     )
 
     act_funs <- bmf(
