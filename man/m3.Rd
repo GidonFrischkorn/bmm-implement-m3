@@ -124,7 +124,7 @@ of choosing a response category is determined by the activation of the candidate
 }
 \item \code{f}:
 \itemize{
-\item \code{main}: logisitic(0,1)
+\item \code{main}: logistic(0,1)
 \item \code{effects}: normal(0,1)
 }
 }

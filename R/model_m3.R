@@ -43,7 +43,7 @@
       softmax = list(
         a = list(main = "normal(3,1)", effects = "normal(0,0.5)"),
         c = list(main = "normal(3,1)", effects = "normal(0,2)"),
-        f = list(main = "logisitic(0,1)", effects = "normal(0,1)")
+        f = list(main = "logistic(0,1)", effects = "normal(0,1)")
       )
     )
   )
@@ -52,7 +52,6 @@
 .model_m3 <- function(resp_cats = NULL, num_options = NULL,
                       choice_rule = "softmax", version = "custom", links = NULL,
                       default_priors = NULL, call = NULL, ...) {
-  names(num_options) <- names(num_options) %||% resp_cats
   out <- structure(
     list(
       resp_vars = nlist(resp_cats),
@@ -150,6 +149,11 @@ m3 <- function(resp_cats, num_options, choice_rule = "softmax", version = "custo
     !tolower(choice_rule) %in% c("softmax", "simple"),
     'Unsupported choice rule "{choice_rule}. Must be one of "simple" or "softmax"'
   )
+  stopif(
+    length(num_options) != length(resp_cats), 
+    "The option variables should have the same length as the response variables."
+  )
+  names(num_options) <- names(num_options) %||% paste0("n_opt_",resp_cats)
 
   .model_m3(
     resp_cats = resp_cats, num_options = num_options,
@@ -204,99 +208,46 @@ check_model.m3_custom <- function(model, data = NULL, formula = NULL) {
 #' @export
 check_data.m3 <- function(model, data, formula) {
   resp_name <- model$resp_vars$resp_cats
-  col_name <- colnames(data)
+  n_opt_vect <- model$other_vars$num_options
+  col_names <- colnames(data)
 
-  # Check if the response variables are legal or not.
-  if (any(grepl("[^[:alnum:]_]", resp_name))) {
-    stop2("Space and punctuation are not allowed in the response variable names.")
-  }
-
-  # Check if the response variables are all present in the data
-  missing_list <- setdiff(resp_name, intersect(resp_name, col_name))
-  if (length(missing_list) > 0) {
-    stop(paste0(
-      "The response variable(s) '",
-      paste0(missing_list, collapse = "', '"),
-      "' is not present in the data."
-    ))
-  }
+  missing_variables <- setdiff(resp_name, col_names)
+  stopif(length(missing_variables), "The response variable(s) {paste0(missing_variables, collapse = ', ')} missing in the data")
 
   # Transfer all of the response variables to a matrix and name it 'Y'
-  data$nTrials <- rowSums(data[, resp_name], na.rm = TRUE)
   resp_matrix <- as.matrix(data[, resp_name])
   resp_matrix[is.na(resp_matrix)] <- 0
+  data <- data[not_in(col_names, resp_name)]
+  data$nTrials <- rowSums(resp_matrix)
   data$Y <- resp_matrix
-  data <- dplyr::select(data, -dplyr::all_of(resp_name))
 
-  # Get the vector of the options variables
-  n_opt_vect <- model$other_vars$num_options
-
-  # Check whether the option variables have the same length as the response variables.
-  if (length(n_opt_vect) != length(resp_name)) {
-    stop2("The option variables should have the same length as the response variables.")
-  }
-
-  # If the number of options is a string, then it is the name of the column in the data
   if (is.character(n_opt_vect)) {
-    option_name <- n_opt_vect
-
-    # Check if the name of the number of options is legal or not.
-    if (any(grepl("[^[:alnum:]_]", option_name))) {
-      stop2("Space and punctuation are not allowed in the number of options variable name.")
-    }
-
-    # Check if the number of options is present in the data
-    missing_list <- setdiff(option_name, intersect(option_name, col_name))
-    if (length(missing_list) > 0) {
-      stop(paste0(
-        "The variable(s) '",
-        paste0(missing_list, collapse = "', '"),
-        "' is not present in the data."
-      ))
-    }
-
-    # create index variables for any number of Option being zero in one row
-    n_opt_idx_vars <- paste0("Idx_", resp_name)
-    for (i in 1:length(n_opt_vect)) {
-      if (all(data[[n_opt_vect[i]]] == 0)) {
-        stop2("At least one of the specified number of candidates in the response categories is zero for all oberservations.\n
-            Please remove this category from the model, as it is not identified.")
-      }
-
-      data[[n_opt_idx_vars[i]]] <- ifelse(data[[n_opt_vect[i]]] > 0, 1, 0)
-      data[[n_opt_vect[i]]] <- ifelse(data[[n_opt_vect[i]]] == 0, 0.0001, data[[n_opt_vect[i]]])
-    }
-
-    # If the number of options is a numeric vector,
-    # then it represents the number of options for each response variable in all conditions.
+    # If the number of options is a string, then it is the name of the column in the data
+    missing_options <- setdiff(n_opt_vect, col_names)
+    stopif(length(missing_options), "The variable(s) {paste0(missing_options, collapse = ', ')} missing in the data")
   } else if (is.numeric(n_opt_vect)) {
-    if (any(n_opt_vect == 0)) {
-      stop2("At least one of the specified number of candidates in the response categories is zero for all oberservations.\n
-            Please remove this category from the model, as it is not identified.")
-    }
-
-    nOpt_name <- paste0("nOpt_", resp_name)
-
-    nOpt_data <- data.frame(nOpt_name, n_opt_vect) %>%
-      tidyr::pivot_wider(names_from = nOpt_name, values_from = n_opt_vect)
-
-    # Add the number of options to the data
-    data <- dplyr::cross_join(data, nOpt_data)
-
-    # create index variables for any number of Option being zero in one row
-    nOpt_idx_vars <- paste0("Idx_", resp_name)
-    for (i in 1:length(n_opt_vect)) {
-      if (all(data[[n_opt_vect[i]]] == 0)) {
-        stop2("At least one of the specified number of candidates in the response categories is zero for all oberservations.\n
-            Please remove this category from the model, as it is not identified.")
-      }
-
-      data[[nOpt_idx_vars[i]]] <- ifelse(data[[n_opt_vect[i]]] > 0, 1, 0)
-      data[[n_opt_vect[i]]] <- ifelse(data[[n_opt_vect[i]]] == 0, 0.0001, data[[n_opt_vect[i]]])
+    # If the number of options is numeric, then it represents the number of options for each response variable
+    for (opt in names(n_opt_vect)) {
+      stopif(opt %in% names(data), "The variable {opt} already exists in the data. Give explicit names to your num_options vector")
+      data[opt] <- n_opt_vect[opt]
     }
   } else {
     stop2("The number of options should be a string or a numeric vector.")
   }
+
+  # create index variables for any number of Option being zero in one row
+  n_opt_idx_vars <- paste0("Idx_", resp_name)
+  for (i in 1:length(n_opt_vect)) {
+    stopif(
+      sum(data[[n_opt_vect[i]]]) == 0,
+      "At least one of the specified number of candidates in the response categories is zero for all oberservations.
+      Please remove this category from the model, as it is not identified."
+    )
+
+    data[[n_opt_idx_vars[i]]] <- ifelse(data[[n_opt_vect[i]]] > 0, 1, 0)
+    data[[n_opt_vect[i]]] <- ifelse(data[[n_opt_vect[i]]] == 0, 0.0001, data[[n_opt_vect[i]]])
+  }
+
   NextMethod("check_data")
 }
 
@@ -319,87 +270,72 @@ check_formula.m3 <- function(model, data, formula) {
 
 #' @export
 check_formula.m3_custom <- function(model, data, formula) {
+  resp_cats <- model$resp_vars$resp_cats
   # test if activation functions for all categories are provided
-  missing_act_funs <- which(!model$resp_vars$resp_cats %in% names(formula))
+  missing_act_funs <- !resp_cats %in% names(formula)
   stopif(
-    length(missing_act_funs) > 0,
-    paste0(
-      "You did not provide activation functions for all response categories.\n ",
-      "Please provide activation functions for the following response categories in your bmmformula:\n ",
-      model$resp_vars$resp_cats[missing_act_funs]
-    )
+    any(missing_act_funs),
+    "You did not provide activation functions for all response categories.
+    Please provide activation functions for the following response categories in your bmmformula:
+    {resp_cats[missing_act_funs]}"
   )
 
   # test if all activation functions contain background noise "b"
-  act_funs <- formula[model$resp_vars$resp_cats]
-  form_miss_b <- unlist(lapply(act_funs, missing_b))
+  act_funs <- formula[resp_cats]
+  form_miss_b <- vapply(act_funs, function(f) !("b" %in% rhs_vars(f)), logical(1))
   stopif(
     any(form_miss_b),
-    paste0(
-      "Some of your activation functions do not contain the background noise parameter \"b\".\n ",
-      "The following activation functions need a background noise parameter: \n",
-      model$resp_vars$resp_cats[which(form_miss_b)]
-    )
+    "Some of your activation functions do not contain the background noise parameter \"b\".
+    The following activation functions need a background noise parameter:
+    {resp_cats[form_miss_b]}"
   )
 
   NextMethod("check_formula")
 }
 
-# helper to test if background noise par is missing
-missing_b <- function(formula) {
-  !("b" %in% rhs_vars(formula))
-}
-
 ############################################################################# !
 # Convert bmmformula to brmsformla methods                               ####
 ############################################################################# !
-# A bmf2bf.* function should be defined if the default method for consructing
-# the brmsformula from the bmmformula does not apply
-# The shared method for all `bmmmodels` is defined in helpers-formula.R.
-# See ?bmf2bf for details.
-# (YOU CAN DELETE THIS SECTION IF YOUR MODEL USES A STANDARD FORMULA WITH 1 RESPONSE VARIABLE)
-
 #' @export
 bmf2bf.m3 <- function(model, formula) {
   # retrieve required response arguments
-  resp_cats <- model$resp_vars$resp_cats
-  nOpt_idx_vars <- paste0("Idx_", resp_cats)
-  names(nOpt_idx_vars) <- resp_cats
   if (is.character(model$other_vars$num_options)) {
-    num_options <- model$other_vars$num_options
+    options_vars <- model$other_vars$num_options
   } else {
-    num_options <- paste0("nOpt_", resp_cats)
-    names(num_options) <- resp_cats
+    options_vars <- names(model$other_vars$num_options)
   }
-
-
-  # retrieve choice rule
-  choice_rule <- tolower(model$other_vars$choice_rule)
+  resp_cats <- model$resp_vars$resp_cats
+  n_opt_idx_vars <- paste0("Idx_", resp_cats)
+  names(n_opt_idx_vars) <- resp_cats
+  names(options_vars) <- resp_cats
 
   # add transformation to activation according to choice rules
-  transform_act <- ifelse(choice_rule == "simple", "log(", "")
-  end_act <- ifelse(choice_rule == "simple", ")", "")
-  zero_Opt <- ifelse(model$other_vars$choice_rule == "softmax", "(-100)", "(exp(-100))")
-  op_Nopts <- ifelse(model$other_vars$choice_rule == "softmax", "+", "*")
-  trans_Nopts <- ifelse(model$other_vars$choice_rule == "softmax", "log(", "")
-  end_Nopts <- ifelse(model$other_vars$choice_rule == "softmax", ")", "")
+  choice_rule <- tolower(model$other_vars$choice_rule)
+  open <- ifelse(choice_rule == "simple", "log(", "")
+  close <- ifelse(choice_rule == "simple", ")", "")
+  zero_opt <- ifelse(choice_rule == "softmax", "(-100)", "exp(-100)")
+  operator <- ifelse(choice_rule == "softmax", "+", "*")
+  open_n_opts <- ifelse(choice_rule == "softmax", "log(", "")
+  close_n_opts <- ifelse(choice_rule == "softmax", ")", "")
 
   # set the base brmsformula based
-  brms_formula <- brms::bf(paste0(
-    "Y | trials(nTrials)", " ~", transform_act, nOpt_idx_vars[resp_cats[1]], "*(", resp_cats[1],
-    op_Nopts, trans_Nopts, num_options[resp_cats[1]], end_Nopts, ")",
-    " + (1-", nOpt_idx_vars[resp_cats[1]], ") *", zero_Opt, end_act
+  cat <- resp_cats[1]
+  brms_formula <- brms::bf(glue(
+    "Y | trials(nTrials) ~ 
+    {open}
+    {n_opt_idx_vars[cat]} * ({cat} {operator} {open_n_opts}{options_vars[cat]}{close_n_opts}) + (1 - {n_opt_idx_vars[cat]}) * {zero_opt}
+    {close}"
   ), nl = TRUE)
 
   # for each dependent parameter, check if it is used as a non-linear predictor of
   # another parameter and add the corresponding brms function
-  for (i in 2:length(resp_cats)) {
-    brms_formula <- brms_formula +
-      glue_nlf(
-        paste0("mu", resp_cats[i]), " ~", transform_act, nOpt_idx_vars[resp_cats[i]], "*(", resp_cats[i],
-        op_Nopts, trans_Nopts, num_options[resp_cats[i]], end_Nopts, ")",
-        " + (1-", nOpt_idx_vars[resp_cats[i]], ") *", zero_Opt, end_act
-      )
+  for (cat in resp_cats[-1]) {
+    brms_formula <- brms_formula + glue_nlf(
+      "mu{cat} ~ 
+      {open}
+      {n_opt_idx_vars[cat]} * ({cat} {operator} {open_n_opts}{options_vars[cat]}{close_n_opts}) + (1 - {n_opt_idx_vars[cat]}) * {zero_opt}
+      {close}"
+    )
   }
 
   brms_formula
@@ -415,18 +351,14 @@ bmf2bf.m3 <- function(model, formula) {
 #' @export
 configure_model.m3 <- function(model, data, formula) {
   # construct brms formula from the bmm formula
-  bmm_formula <- formula
-  formula <- bmf2bf(model, bmm_formula)
+  formula <- bmf2bf(model, formula)
 
   # construct the family
   formula$family <- brms::multinomial(refcat = NA)
-
   formula$family$cats <- model$resp_vars$resp_cats
   formula$family$dpars <- paste0("mu", model$resp_vars$resp_cats)
 
-  # return the list
-  out <- nlist(formula, data)
-  return(out)
+  nlist(formula, data)
 }
 
 
