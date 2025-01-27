@@ -52,6 +52,7 @@
 .model_m3 <- function(resp_cats = NULL, num_options = NULL,
                       choice_rule = "softmax", version = "custom", links = NULL,
                       default_priors = NULL, call = NULL, ...) {
+  names(num_options) <- names(num_options) %||% resp_cats
   out <- structure(
     list(
       resp_vars = nlist(resp_cats),
@@ -85,7 +86,6 @@
     call = call
   )
 
-  # add version specific info to the model object
   out$links[names(links)] <- links
   out$default_priors[names(default_priors)] <- default_priors
   out
@@ -162,57 +162,38 @@ m3 <- function(resp_cats, num_options, choice_rule = "softmax", version = "custo
 ############################################################################# !
 
 #' @export
-check_model.m3 <- function(model, data = NULL, formula = NULL) {
-  # name number of response options if names are empty
-  names(model$other_vars$num_options) <- names(model$other_vars$num_options) %||% model$resp_vars$resp_cats
-  NextMethod("check_model")
-}
-
-#' @export
 check_model.m3_custom <- function(model, data = NULL, formula = NULL) {
-  existing_par_names <- names(model$parameters)
-
-  if(!is.null(formula)) {
+  if (!is.null(formula)) {
     user_pars <- rhs_vars(formula[is_nl(formula)])
-    user_pars <- user_pars[-which(user_pars %in% names(formula[is_nl(formula)]))]
-    user_pars <- user_pars[which(!user_pars %in% names(model$parameters))]
-    if (length(user_pars > 0)) {
-      model$parameters <- append(model$parameters, user_pars)
-      names(model$parameters) <- c(existing_par_names, user_pars)
-    }
+    user_pars <- setdiff(user_pars, names(formula[is_nl(formula)]))
+    user_pars <- setdiff(user_pars, names(model$parameters))
+    model$parameters <- c(model$parameters, setNames(user_pars, user_pars))
   }
 
-  # add link functions if missing
   stopif(
-    length(model$links) < (length(model$parameters) - 1),
+    length(model$links) < length(model$parameters) - 1,
     "Please provide link functions for all model parameters to ensure proper identification of your model"
   )
 
   # add default priors if missing
-  missing_priors <- names(model$parameters[which(!model$parameters %in% names(model$default_priors))])
-  missing_priors <- missing_priors[which(!missing_priors %in% names(model$fixed_parameters))]
+  missing_priors <- setdiff(names(model$parameters), names(model$default_priors))
+  missing_priors <- setdiff(missing_priors, names(model$fixed_parameters))
   warnif(
     length(missing_priors) > 0 && getOption("bmm.default_priors"),
     "You have not provided default_priors for at least one parameter in the model.
     Default priors will be specified internally based on the provided link function.
     Please check if the used priors are reasonable for your application"
   )
-  for (m in missing_priors) {
-    if (model$links[[m]] == "log") {
-      prior <- list(main = "normal(1,1)", effect = "normal(0,0.5)")
-    } else if (model$links[[m]] == "identity") {
-      prior <- list(main = "normal(0,1)", effect = "normal(0,1)")
-    } else if (model$links[[m]] == "logit") {
-      prior <- list(main = "normal(0,1)", effect = "normal(0,1)")
-    } else {
-      stop2(glue(
-        "Invalid link function provided!\n",
-        "Please use one of the following link functions: identity, log, logit"
-      ))
-    }
-    model$default_priors[[m]] <- prior
-  }
-
+  additional_priors <- lapply(missing_priors, function(m) {
+    switch(model$links[[m]],
+      log = list(main = "normal(1,1)", effect = "normal(0,0.5)"),
+      identitiy = list(main = "normal(0,1)", effect = "normal(0,1)"),
+      logit = list(main = "normal(0,1)", effect = "normal(0,1)"),
+      stop2("Invalid link function provided! Please use one of the following link functions: identity, log, logit")
+    )
+  })
+  model$default_priors <- c(model$default_priors, additional_priors)
+  
   NextMethod("check_model")
 }
 
@@ -222,9 +203,7 @@ check_model.m3_custom <- function(model, data = NULL, formula = NULL) {
 
 #' @export
 check_data.m3 <- function(model, data, formula) {
-  # Get the vector of the response variables
   resp_name <- model$resp_vars$resp_cats
-  # Get the names for each columns
   col_name <- colnames(data)
 
   # Check if the response variables are legal or not.
